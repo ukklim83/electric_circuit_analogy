@@ -60,7 +60,7 @@ def main():
         inlet_node_idx[1]: inlet_edge_idx[1],
     }  # inlet connection dictionary
 
-    changing_edges = [i for i in range(17)]
+    changing_edges = [i for i in range(26)]
 
     ini_list = [
         ["f", 0, np.nan, "o", "m^3/s"],
@@ -68,8 +68,8 @@ def main():
         ["f", 2, np.nan, "o", "m^3/s"],
         ["f", 3, np.nan, "o", "m^3/s"],
         ["f", 4, np.nan, "o", "m^3/s"],
-        ["f", 14, 10 * 10**-6 / 60, "i", "m^3/s"],
-        ["f", 15, 10 * 10**-6 / 60, "i", "m^3/s"],
+        ["f", 20, 10 * 10**-6 / 60, "i", "m^3/s"],
+        ["f", 21, 10 * 10**-6 / 60, "i", "m^3/s"],
     ]
 
     plot_type = (
