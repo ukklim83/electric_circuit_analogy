@@ -1,184 +1,123 @@
-from electric_analogy import *
+"""Shared command-line driver for every supported circuit topology."""
+from __future__ import annotations
+import argparse
+import shutil
+from pathlib import Path
+from typing import Sequence
 
+try:
+    from .electric_analogy import execute_functions, execute_length_change, plotting_outlet
+    from .system_configs import REPOSITORY_ROOT, SYSTEM_CONFIGS, get_system_config
+except ImportError:  # Direct execution from codes/.
+    from electric_analogy import execute_functions, execute_length_change, plotting_outlet
+    from system_configs import REPOSITORY_ROOT, SYSTEM_CONFIGS, get_system_config
 
-def main():
-    address = "./electric_circuit_analogy"
-    
-    whatToSolve = [
-        # "length",
-        # "source",
-        # "concentration",
-        # "optimization",
-        "compare_optimization",
-    ]  # str: choose what to solve; 'length', 'source', 'concentration' or 'optimization'
-    inc_csv = "incidence_mat.csv"  # str: incidence_matrix filename
-    length_csv = "length_mat.csv"  # str: length_matrix filename
-    conc_csv = "concentration_mat.csv"  # str: concentration_matrix filename
+OPTIMIZERS = ("nsga2", "pso", "slsqp")
+INPUT_FILES = ("incidence_mat.csv", "length_mat.csv", "concentration_mat.csv")
 
-    ############################################
-    # <Rule for incidence matrix>              #
-    # node indices: "outlet first, inlet last" #
-    # edge indices: "outlet first, inlet last" #
-    ############################################
+def _prepare_run_directory(config, output_dir: Path) -> Path:
+    """Copy immutable topology inputs into a writable result directory."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for filename in INPUT_FILES:
+        source = config.input_dir / filename
+        if not source.is_file():
+            raise FileNotFoundError(f"Missing {config.name} input: {source}")
+        destination = output_dir / filename
+        if source.resolve() != destination.resolve():
+            shutil.copy2(source, destination)
+    return output_dir
 
-    ###################################
-    # <Rule for concentration matrix> #
-    # The order of variables is same  #
-    # as the order of inlet number.   #
-    ###################################
-
-    #####################################################
-    # <Rule for ini_list>                               #
-    # The order of ini_list:                            #
-    # "outlet first, inlet last."                       #
-    # ["b or f", node, value, "i or o", m^3/s or Pa]    #
-    #####################################################
-
-    # %% Constants
-    # Divide section to input constants
-    w = 100 * 10 ** (-6)
-    h = 100 * 10 ** (-6)
-    eta = 1.002 * 10 ** (-5)
-    n = 20001
-
-    args = (eta, w, h, n)
-
-    outlet_edge_idx = [0, 1, 2, 3]  # outlet edge indices
-    outlet_node_idx = [0, 1, 2, 3]  # outlet node indices
-    outlet_dict = {
-        outlet_edge_idx[0]: outlet_node_idx[0],
-        outlet_edge_idx[1]: outlet_node_idx[1],
-        outlet_edge_idx[2]: outlet_node_idx[2],
-        outlet_edge_idx[3]: outlet_node_idx[3],
-    }  # outlet connection dictionary
-
-    inlet_edge_idx = [9, 10]  # inlet edge indices
-    inlet_node_idx = [9, 10]  # inlet node indices
-    inlet_dict = {
-        inlet_node_idx[0]: inlet_edge_idx[0],
-        inlet_node_idx[1]: inlet_edge_idx[1],
-    }  # inlet connection dictionary
-
-    changing_edges = [i for i in range(11)]
-
-    ini_list = [
-        ["f", 0, np.nan, "o", "m^3/s"],
-        ["f", 1, np.nan, "o", "m^3/s"],
-        ["f", 2, np.nan, "o", "m^3/s"],
-        ["f", 3, np.nan, "o", "m^3/s"],
-        ["f", 9, 2.89 * 10**-9 / 60, "i", "m^3/s"],
-        ["f", 10, 1.11 * 10**-9 / 60, "i", "m^3/s"],
-    ]
-
-    plot_type = (
-        "compare",
-        "concentration",
-        "difference",
-    )  # str: choose plot type; 'compare', 'concentration', 'difference'
-
+def run(
+    system: str = "system1",
+    optimizer: str = "nsga2",
+    *,
+    seed: int = 1,
+    pop_size: int | None = None,
+    n_gen: int | None = None,
+    n_starts: int = 20,
+    maxiter: int = 1000,
+    output_dir: str | Path | None = None,
+    optimize: bool = True,
+):
+    """Run one topology with the canonical solver and selected optimizer."""
+    config = get_system_config(system)
+    optimizer = str(optimizer).strip().lower()
+    if optimizer not in OPTIMIZERS:
+        raise ValueError(f"optimizer must be one of: {', '.join(OPTIMIZERS)}")
+    run_dir = (
+        REPOSITORY_ROOT / "results" / config.name / optimizer
+        if output_dir is None
+        else Path(output_dir).expanduser().resolve()
+    )
+    input_dir = config.input_dir.resolve()
+    resolved_run_dir = run_dir.resolve()
+    if resolved_run_dir == input_dir or input_dir in resolved_run_dir.parents:
+        raise ValueError(
+            "The output directory must not be the system input directory or one "
+            "of its subdirectories. Use results/<system>/<optimizer> or another "
+            "separate directory."
+        )
+    run_dir = _prepare_run_directory(config, run_dir)
+    what_to_solve = ["source", "concentration"]
+    length_csv = config.length_csv
     nametag = "total"
+    ini_list = config.mutable_ini_list()
 
-    # %% Optimization of the popsize and ngen
-    if "optimization" in whatToSolve:
-        conc_wght = 0.5
-        flow_wght = 1 - conc_wght
-        optimization_functions(
-            whatToSolve,
-            changing_edges,
-            inc_csv,
-            length_csv,
-            conc_csv,
-            args,
-            ini_list,
-            inlet_node_idx,
-            inlet_edge_idx,
-            outlet_node_idx,
-            outlet_edge_idx,
-            conc_wght,
-            flow_wght,
-            plot_type,
-            address,
-        )
-
-    # %% Changing lengths of the edges
-    if "length" in whatToSolve:
-        conc_wght = 0.5
-        flow_wght = 1 - conc_wght
+    if optimize:
+        what_to_solve.insert(0, "length")
+        default_pop = {"nsga2": 600, "pso": 50, "slsqp": 200}[optimizer]
+        selected_pop = default_pop if pop_size is None else pop_size
+        selected_gen = 600 if optimizer == "nsga2" and n_gen is None else n_gen
+        options: dict[str, object] = {}
+        if optimizer == "pso":
+            options.update(seed=seed, max_fes_per_dim=10_000)
+        elif optimizer == "slsqp":
+            options.update(seed=seed, n_starts=n_starts, maxiter=maxiter)
         execute_length_change(
-            whatToSolve,
-            changing_edges,
-            inc_csv,
-            length_csv,
-            conc_csv,
-            args,
-            ini_list,
-            inlet_node_idx,
-            inlet_edge_idx,
-            outlet_node_idx,
-            outlet_edge_idx,
-            conc_wght,
-            flow_wght,
-            address,
-            popSize=600,
-            nGen=600,
+            what_to_solve, list(config.changing_edges), config.inc_csv,
+            length_csv, config.conc_csv, config.args, ini_list,
+            list(config.inlet_node_idx), list(config.inlet_edge_idx),
+            list(config.outlet_node_idx), list(config.outlet_edge_idx),
+            0.5, 0.5, str(run_dir), popSize=selected_pop,
+            nGen=selected_gen, optimizer=optimizer, **options,
         )
-
         length_csv = "new_length_mat.csv"
         nametag = "revised"
 
-    # %% Executing functions_all
     i_vec, conc_vec = execute_functions(
-        whatToSolve,
-        inc_csv,
-        length_csv,
-        args,
-        ini_list,
-        inlet_node_idx,
-        inlet_edge_idx,
-        nametag,
-        address,
+        what_to_solve, config.inc_csv, length_csv, config.args, ini_list,
+        list(config.inlet_node_idx), list(config.inlet_edge_idx), nametag,
+        str(run_dir),
     )
-
-    # %% Plotting graphs
     plotting_outlet(
-        i_vec,
-        outlet_edge_idx,
-        plot_type,
-        address,
-        whatToSolve,
-        ini_list,
-        args,
-        conc_vec,
-        nametag,
-        inc_csv,
-        length_csv,
-        conc_csv,
+        i_vec, list(config.outlet_edge_idx), config.plot_type, str(run_dir),
+        what_to_solve, ini_list, config.args, conc_vec, nametag,
+        config.inc_csv, length_csv, config.conc_csv,
+    )
+    print(f"Results written to: {run_dir}")
+    return i_vec, conc_vec, run_dir
+
+def build_parser(default_system: str = "system1") -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Solve or optimize an electric-analogy circuit.")
+    parser.add_argument("--system", choices=tuple(SYSTEM_CONFIGS), default=default_system)
+    parser.add_argument("--optimizer", choices=OPTIMIZERS, default="nsga2")
+    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--pop-size", type=int)
+    parser.add_argument("--n-gen", type=int)
+    parser.add_argument("--n-starts", type=int, default=20)
+    parser.add_argument("--maxiter", type=int, default=1000)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--solve-only", action="store_true", help="Skip length optimization.")
+    return parser
+
+def main(default_system: str = "system1", argv: Sequence[str] | None = None):
+    args = build_parser(default_system).parse_args(argv)
+    return run(
+        system=args.system, optimizer=args.optimizer, seed=args.seed,
+        pop_size=args.pop_size, n_gen=args.n_gen, n_starts=args.n_starts,
+        maxiter=args.maxiter, output_dir=args.output_dir,
+        optimize=not args.solve_only,
     )
 
-    # %% Compare optimization
-    if "compare_optimization" in whatToSolve:
-        whatToSolve = [
-            "length",
-            "source",
-            "concentration",
-            # "optimization",
-            "compare_optimization",
-        ]
-        pareto_compare(
-            whatToSolve,
-            inc_csv,
-            "new_lengths_mat.csv",
-            conc_csv,
-            args,
-            ini_list,
-            inlet_node_idx,
-            inlet_edge_idx,
-            outlet_node_idx,
-            outlet_edge_idx,
-            address,
-        )
-
-
-# %% Executing
 if __name__ == "__main__":
     main()

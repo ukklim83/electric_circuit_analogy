@@ -14,7 +14,11 @@ from pymoo.core.callback import Callback
 from pymoo.visualization.scatter import Scatter
 from scipy.spatial.distance import cdist
 import time
-from resistance import *
+import sys
+try:
+    from .resistance import *
+except ImportError:  # Support direct execution from the codes directory.
+    from resistance import *
 
 
 class MicrofluidicOptimizationProblem(Problem):
@@ -889,7 +893,7 @@ def solve_unknown_source_current_driven(
     print(np.linalg.matrix_rank(inc_mat_modified, tol=1e-30))
 
     # Solve the modified system
-    soln = np.linalg.solve(inc_mat_modified, b_f_modified)
+    soln = np.linalg.solve(inc_mat_modified, b_f_modified[..., np.newaxis])[..., 0]
 
     # Extract solution components
     x = soln[: -len(ini_list_outlet)]
@@ -990,7 +994,7 @@ def solve_unknown_source_pressure_driven(
     b_f_modified = np.hstack((b_f_modified, np.zeros(len(ini_list_outlet))))
 
     # Solve the modified system
-    soln = np.linalg.solve(inc_mat_modified, b_f_modified)
+    soln = np.linalg.solve(inc_mat_modified, b_f_modified[..., np.newaxis])[..., 0]
 
     # Extract solution components
     x = soln[: -len(ini_list_outlet) - len(ini_list_inlet)]
@@ -1273,7 +1277,7 @@ def solve_unknown_source_current_driven_vec(
     print(np.linalg.matrix_rank(inc_mat_modified[0], tol=1e-30))
 
     # Solve the modified system
-    soln = np.linalg.solve(inc_mat_modified, b_f_modified)
+    soln = np.linalg.solve(inc_mat_modified, b_f_modified[..., np.newaxis])[..., 0]
 
     # Extract solution components
     x_vec = soln[:, : -len(ini_list_outlet)]
@@ -1382,7 +1386,7 @@ def solve_unknown_source_pressure_driven_vec(
     )
 
     # Solve the modified system
-    soln = np.linalg.solve(inc_mat_modified, b_f_modified)
+    soln = np.linalg.solve(inc_mat_modified, b_f_modified[..., np.newaxis])[..., 0]
 
     # Extract solution components
     x_vec = soln[:, : -len(ini_list_outlet) - len(ini_list_inlet)]
@@ -1942,7 +1946,7 @@ def conc_calculation(
         LHS_modified = LHS.T @ LHS
         RHS_modified = LHS.T @ RHS
 
-        soln = np.linalg.solve(LHS_modified, RHS_modified)
+        soln = np.linalg.solve(LHS_modified, RHS_modified[..., np.newaxis])[..., 0]
 
         conc_vec.append(soln[: len(ini_list_outlet)])
 
@@ -2143,7 +2147,7 @@ def conc_calculation_vec(
         LHS_modified = np.einsum("ijk,ikl->ijl", np.transpose(LHS, axes=(0, 2, 1)), LHS)
         RHS_modified = np.einsum("ijk,ik->ij", np.transpose(LHS, axes=(0, 2, 1)), RHS)
 
-        soln = np.linalg.solve(LHS_modified, RHS_modified)
+        soln = np.linalg.solve(LHS_modified, RHS_modified[..., np.newaxis])[..., 0]
 
         conc_vec.append(soln[:, : len(ini_list_outlet)])
 
@@ -2337,7 +2341,7 @@ def mat_divide_vec(mat, ini_list_inlet, ini_list_outlet, dim):
         raise ValueError("Dimension (dim) must be either 1 or 2")
 
 
-def execute_length_change(
+def _execute_length_change_nsga2(
     whatToSolve,
     changing_edges,
     inc_csv,
@@ -2392,7 +2396,9 @@ def execute_length_change(
 
     # Load and prepare initial data
     length_df = pd.read_csv(f"{address}/{length_csv}", index_col="edge")
-    length = length_df["length"].to_numpy()
+    # pandas 3 can expose a read-only NumPy view; the selected design is
+    # assigned into this array below, so request an owned writable copy.
+    length = length_df["length"].to_numpy(copy=True)
 
     lb = np.array([i / 3 for i in length])
     ub = np.array([i * 3 for i in length])
@@ -2734,7 +2740,9 @@ def select_optimal_solution(res):
     # Normalize the objectives
     min_values = np.min(res.F, axis=0)
     max_values = np.max(res.F, axis=0)
-    normalized_objectives = (res.F - min_values) / (max_values - min_values)
+    objective_span = max_values - min_values
+    objective_span[objective_span == 0] = 1.0
+    normalized_objectives = (res.F - min_values) / objective_span
 
     # Calculate distances to the ideal point (origin)
     distances = cdist(normalized_objectives, np.array([[0, 0]]))
@@ -4361,3 +4369,103 @@ def calculate_hypervolume_contribution(point, other_points):
             area -= overlap
             
     return max(0, area)  # Ensure non-negative contribution
+
+
+def execute_length_change(
+    whatToSolve,
+    changing_edges,
+    inc_csv,
+    length_csv,
+    conc_csv,
+    args,
+    ini_list,
+    inlet_node_idx,
+    inlet_edge_idx,
+    outlet_node_idx,
+    outlet_edge_idx,
+    conc_wght,
+    flow_wght,
+    address,
+    popSize=200,
+    nGen=200,
+    *,
+    optimizer="nsga2",
+    **optimizer_options,
+):
+    """Optimize channel lengths using NSGA-II, PSO, or multi-start SLSQP.
+
+    The positional parameters and the ``popSize``/``nGen`` defaults preserve
+    the original public API. Existing callers therefore continue to use
+    NSGA-II unless they explicitly pass ``optimizer="pso"`` or
+    ``optimizer="slsqp"``.
+
+    PSO and SLSQP are loaded lazily and receive this module explicitly as their
+    circuit solver. This avoids circular imports and keeps the hydraulic and
+    concentration calculations identical across all three optimizers.
+
+    By default every backend writes ``new_length_mat.csv`` so the established
+    ``electric_analogy_programming.py`` workflow can read the result unchanged.
+    Pass ``output_suffix`` when algorithm-specific output files are desired.
+    """
+    optimizer_key = str(optimizer).strip().lower().replace("_", "").replace("-", "")
+    common_args = (
+        whatToSolve,
+        changing_edges,
+        inc_csv,
+        length_csv,
+        conc_csv,
+        args,
+        ini_list,
+        inlet_node_idx,
+        inlet_edge_idx,
+        outlet_node_idx,
+        outlet_edge_idx,
+        conc_wght,
+        flow_wght,
+        address,
+    )
+
+    if optimizer_key in {"nsga2", "nsgaii", "nsga"}:
+        if optimizer_options:
+            unknown = ", ".join(sorted(optimizer_options))
+            raise TypeError(f"Unsupported NSGA-II option(s): {unknown}")
+        return _execute_length_change_nsga2(
+            *common_args,
+            popSize=popSize,
+            nGen=nGen,
+        )
+
+    solver_module = sys.modules[__name__]
+    optimizer_options.setdefault("output_suffix", "")
+
+    if optimizer_key in {"pso", "particleswarm", "particleswarmoptimization"}:
+        if __package__:
+            from .electric_analogy_pso import execute_length_change as execute_pso
+        else:
+            from electric_analogy_pso import execute_length_change as execute_pso
+
+        return execute_pso(
+            *common_args,
+            popSize=popSize,
+            nGen=nGen,
+            solver_module=solver_module,
+            **optimizer_options,
+        )
+
+    if optimizer_key in {"slsqp", "multistartslsqp"}:
+        if __package__:
+            from .electric_analogy_slsqp import execute_length_change as execute_slsqp
+        else:
+            from electric_analogy_slsqp import execute_length_change as execute_slsqp
+
+        return execute_slsqp(
+            *common_args,
+            popSize=popSize,
+            nGen=nGen,
+            solver_module=solver_module,
+            **optimizer_options,
+        )
+
+    raise ValueError(
+        f"Unknown optimizer {optimizer!r}; choose 'nsga2', 'pso', or 'slsqp'."
+    )

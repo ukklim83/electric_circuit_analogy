@@ -1,97 +1,238 @@
-# electric_circuit_analogy
+# Electric Circuit Analogy
 
-## Code Structure
-- Consists of `electric_analogy_programming.py` and `electric_analogy.py`.
+**English** | [한국어](README_ko.md)
 
-- `electric_analogy_programming.py`: Sets up channel geometry and configuration, executes functions
+Electric Circuit Analogy is a Python program for analyzing microfluidic channel
+networks as equivalent electrical circuits and optimizing channel lengths to
+match target outlet flow rates and concentrations. It supports standard circuit
+analysis together with NSGA-II, PSO, and multi-start SLSQP optimization.
 
-- `electric_analogy.py`: Shared across all channels, calculates flow rate/concentration and optimizes channel length
+## Features
 
-## `electric_analogy_programming.py`
-- Imports geometric structure for each channel from CSV files
-    - `incidence_mat.csv`
-    - `length_mat.csv`
-    - `concentration_mat.csv`
+- Incidence-matrix-based channel network analysis
+- Per-channel flow-rate and pressure calculations using Kirchhoff's laws
+- Outlet concentration calculations for multicomponent fluids
+- Channel-length optimization with NSGA-II, PSO, or multi-start SLSQP
+- Four example topologies and input datasets: system1 through system4
+- Separate result directories for each system and optimizer
 
-- Sets inlet conditions for each channel
-    - `ini_list`
-        - `["b or f", node, value, "i or o", m^3/s or Pa]`
+## Requirements
 
-- Executes functions from `electric_analogy.py`
-    - `execute_functions()`: Calculates flow rate and concentration
-    - `execute_length_change()`: Optimizes channel length
-    - `plotting_outlet()`: Plots outlet flow rate and concentration
+- Python 3.10 or later
+- NumPy 1.24 or later and earlier than 3
+- pandas 2 or later and earlier than 4
+- SciPy 1.10 or later and earlier than 2
+- Matplotlib 3.7 or later and earlier than 4
+- pymoo 0.6 or later and earlier than 0.7
 
-## `electric_analogy.py`
-- Function execution sequence
-    - `execute_functions()`
-        - Variable setup
-        - Imports incidence_mat & length_mat
-        - Creates block matrices
-            - Resistance calculations for various channel types are imported from `resistance.py`
-        - `Kirchhoff_solver()`: Calculates flow rate using **Kirchhoff's law**
-        - `conc_calculation()`: Calculates concentration using modified **Kirchhoff's current law**
-        
-    - `plotting_outlet()`: Plots calculated flow rates and concentrations
-    
-    - `execute_length_change()`
-        - Calculates constraints for flow rate and pressure
-        - `MicrofluidicOptimizationProblem()`: Defines **multi-objective optimization** problem
-        - Plots and saves Pareto front
-        - Saves newly obtained revised length as `new_length_mat.csv`
-        - Runs `execute_functions()` with `new_length_mat.csv` to verify improved results
+## Installation
 
-- Key function descriptions
-    - `Kirchhoff_solver()`
-        - Divides modes based on whether there are unknowns in vector $\mathbf{f}$ (`isSourceUnknown`) and whether inlet conditions are given as flow rate or pressure (`Q_driven` or `P_driven`)
-        - `isSourceUnknown == False`
-            - Generally solves $\left[\begin{array}{cc}R&A\A^T&0\end{array}\right]\left[\begin{array}{c}q\p\right]=\left[\begin{array}{c}b\f\end{array}\right]$, which requires **grounding** by setting one outlet pressure value to 0
-            - For `Q_driven`, directly solves the equation (`solve_current_driven()`)
-            - For `P_driven`, rearranges vectors $\mathbf{p}_i$ and $\mathbf{f}_i$ (`solve_pressure_driven()`)
-        
-        - `isSourceUnknown == True`
-            - Includes $\mathbf{p}_o = 0$ in the equation, so no additional **grounding** is needed
-            - Both cases appropriately rearrange and solve equations (`solve_unknown_source_current_driven()`, `solve_unknown_source_pressure_driven()`)
-            
-        - For all `P_driven` cases, returns modified `b_f` with calculated inlet flow rates (for concentration calculations)
-        
-    - `conc_calculation()`
-        - Constructs Modified Kirchhoff's current law equations
-            - Assigns diagonal matrices variables for $\mathbf{q}$ & $\mathbf{f}$ vectors (`i_mat`, `f_mat`)
-            - Uses `mat_divide()` to split incidence matrix, flow rate, and source vector into inlet/intermediate/outlet parts
-            - Specifies additional constraints for **diverging nodes** in `two_or_more_outlet_mats`
-            - Combines these to form left and right block matrices
-            
-        - Derives and solves normal equation since left-hand matrix is not square
-        - Returns outlet concentration
+From the repository root, install the dependencies into the Python environment
+you intend to use. A system Python installation, a conda environment, or any
+other environment manager may be used.
 
-    - `execute_length_change()`
-        - Reads desired concentration from `concentration_mat.csv` to calculate target concentration
-        - Calculates target flow as equal distribution of total inlet flow to each outlet (`calculate_currents()`)
-            - If inlet condition is given as pressure, calculates inlet flow rate at that pressure using Kirchhoff solver once (`calculate_pressure_driven_current`)
-            
-        - `MicrofluidicOptimizationProblem()`: Uses *pymoo* module which defines problems in Problem class, creating an object with `problem = Problem()` as an argument for minimize operation
-            - Includes constraints that flow rate and concentration must be non-negative to filter physically impossible cases
-            - Sets objective function as the **norm** of the **difference** between target and actual flow rates and concentrations
-            - `constraint_diff()` calculates this difference
-                - Returns the difference between target flow/concentration and actual flow/concentration calculated by `length_change_func()`
-                - Target and actual flow rates are scaled by total inlet flow  
-            - All functions are vectorized for faster computation
-                - pymoo `Problem()` creates a single numpy array (`shape = popSize * n_var`) with samples of the specified population size (`popSize`)
-                - Instead of using `for i in popSize` loops which slow down execution
-                - Functions are vectorized to process `popSize * n_var` sized variables at once:
-                    - [] `construct_block_mat_vec()`
-                    - [] `ground_block_mat_vec()`
-                    - [] `Kirchhoff_solver_vec()`
-                    - [] `solve_current_driven_vec()`
-                    - [] `solve_pressure_driven_vec()`
-                    - [] `solve_unknown_source_current_driven_vec()`
-                    - [] `solve_unknown_source_pressure_driven_vec()`
-                    - [] `ground_calculation_vec()`
-                    - [] `ground_off_vec()`
-                    - [] `conc_calculation_vec()`
-                    - [] `mat_divide_vec()`
+```bash
+python -m pip install -r requirements.txt
+```
 
-        - Defines algorithm and callback for optimization monitoring, then runs optimization
-        - Plots Pareto front (`process_optimization_results`)
-        - Saves improved length to CSV file
+If your system uses `python3` as the Python command, run
+`python3 -m pip install -r requirements.txt` instead. If you use conda or another
+environment manager, select the intended environment before running the command.
+
+Verify the installation and CLI with:
+
+```bash
+python electric_analogy_programming.py --help
+```
+
+## Quick start
+
+For a first run, analyze the original system1 design without optimization:
+
+```bash
+python electric_analogy_programming.py --system system1 --solve-only
+```
+
+By default, the results are written to `results/system1/nsga2/`. With
+`--solve-only`, `--optimizer` is not used for optimization but still supplies
+the optimizer name in the result path.
+
+Select an optimizer to optimize channel lengths:
+
+```bash
+# NSGA-II
+python electric_analogy_programming.py --system system1 --optimizer nsga2
+
+# Particle Swarm Optimization
+python electric_analogy_programming.py --system system2 --optimizer pso
+
+# Multi-start SLSQP
+python electric_analogy_programming.py --system system3 --optimizer slsqp
+```
+
+Running the launcher without arguments performs NSGA-II length optimization on
+system1. The default settings can require substantial computation. For a quick
+functional test, use smaller populations and iteration counts:
+
+```bash
+python electric_analogy_programming.py --system system1 --optimizer nsga2 --pop-size 20 --n-gen 10
+python electric_analogy_programming.py --system system1 --optimizer pso --pop-size 10 --n-gen 10
+python electric_analogy_programming.py --system system1 --optimizer slsqp --n-starts 2 --maxiter 20
+```
+
+## Command-line options
+
+| Option | Description | Default |
+|---|---|---|
+| `--system` | System to run: `system1`, `system2`, `system3`, or `system4` | `system1` |
+| `--optimizer` | Optimization method: `nsga2`, `pso`, or `slsqp` | `nsga2` |
+| `--seed` | Random seed for PSO/SLSQP | `1` |
+| `--pop-size` | NSGA-II population size or PSO swarm size | NSGA-II `600`; PSO `50` |
+| `--n-gen` | Maximum NSGA-II/PSO generations | NSGA-II `600`; PSO derives it from its evaluation budget |
+| `--n-starts` | Number of independent SLSQP restarts | `20` |
+| `--maxiter` | Maximum iterations in each SLSQP run | `1000` |
+| `--output-dir` | User-defined result directory | `results/<system>/<optimizer>/` |
+| `--solve-only` | Analyze the input design without length optimization | Disabled |
+
+For reproducible PSO/SLSQP runs, record the `--seed` together with all other
+optimizer options.
+
+## Input data
+
+Each system directory must contain these three input CSV files:
+
+```text
+system1/
+├── incidence_mat.csv
+├── length_mat.csv
+└── concentration_mat.csv
+```
+
+- `incidence_mat.csv`: incidence matrix describing connections between edges
+  and nodes
+- `length_mat.csv`: channel length for each edge
+- `concentration_mat.csv`: target component concentrations at each outlet
+
+Fluid properties, channel cross sections, inlet/outlet indices, inlet flow
+rates, and the list of optimizable edges are defined for each system in
+`codes/system_configs.py`. The edge and node order in the CSV files must match
+the indices in that configuration.
+
+Treat the system directories as original input storage. The program copies the
+input CSV files to the result directory and works on those copies. It rejects an
+`--output-dir` that points to a system input directory or one of its
+subdirectories.
+
+See [`conc_matrix_explanation.md`](conc_matrix_explanation.md) for more details
+about the concentration matrix.
+
+## Results
+
+The default result layout is:
+
+```text
+results/
+└── system1/
+    ├── nsga2/
+    ├── pso/
+    └── slsqp/
+```
+
+At the end of a run, the program prints the actual result directory as
+`Results written to: ...`. Depending on the selected mode, generated files may
+include:
+
+- `new_length_mat.csv`: optimized channel lengths
+- `current_vec_total.csv`, `voltage_vec_total.csv`: original-design flow rates
+  and pressures
+- `current_vec_revised.csv`, `voltage_vec_revised.csv`: optimized-design flow
+  rates and pressures
+- `outlet_*.png`: outlet flow-rate and concentration plots
+- `pareto_front.png`, `pareto_optimal_*.csv`: NSGA-II results
+- `pso_optimization_summary.csv`: PSO run summary
+- `slsqp_restart_summary.csv`: results for each SLSQP restart
+
+Use `--output-dir` to select a custom result location:
+
+```bash
+python electric_analogy_programming.py --system system4 --optimizer pso --output-dir my_results/system4_pso
+```
+
+## Running from Python
+
+You can call the shared driver from another Python program instead of using the
+CLI:
+
+```python
+from codes.electric_analogy_programming import run
+
+flow, concentration, result_dir = run(
+    system="system1",
+    optimizer="pso",
+    seed=42,
+    pop_size=20,
+    n_gen=50,
+)
+```
+
+Pass `optimize=False` to analyze a design without optimization:
+
+```python
+flow, concentration, result_dir = run(
+    system="system1",
+    optimizer="nsga2",
+    optimize=False,
+)
+```
+
+Import `codes.electric_analogy` when direct access to the lower-level circuit
+analysis API is required. The root-level `electric_analogy.py` is a compatibility
+facade for existing `import electric_analogy` users.
+
+## Project structure
+
+```text
+electric_circuit_analogy/
+├── electric_analogy.py                 # Root compatibility facade
+├── electric_analogy_programming.py     # Main CLI launcher
+├── requirements.txt
+├── codes/
+│   ├── electric_analogy.py             # Shared solver and NSGA-II
+│   ├── electric_analogy_pso.py         # PSO backend
+│   ├── electric_analogy_slsqp.py       # Multi-start SLSQP backend
+│   ├── electric_analogy_programming.py # Shared CLI/driver
+│   ├── system_configs.py               # Configuration for system1-system4
+│   └── resistance.py                   # Channel resistance formulas
+├── system1/                            # Input data and compatibility launcher
+├── system2/
+├── system3/
+├── system4/
+└── results/                            # Generated at runtime; ignored by Git
+```
+
+## System-specific launchers
+
+Launchers inside the system directories are also available. Running commands
+from the repository root is recommended.
+
+```bash
+python system1/electric_analogy_programming.py --optimizer pso
+python system4/electric_analogy_programming.py --optimizer slsqp
+```
+
+Each launcher selects its corresponding system by default and delegates all
+calculations to the same shared driver and solver.
+
+## Troubleshooting
+
+- If a `ModuleNotFoundError` occurs, confirm that the dependencies are installed
+  in the Python environment currently running the program, then run
+  `python -m pip install -r requirements.txt` again.
+- If an input-file error occurs, confirm that all three CSV files exist in the
+  selected system directory.
+- If an output-path `ValueError` occurs, select a separate directory outside
+  `system1` through `system4`.
+- If optimization takes too long, reduce `--pop-size`, `--n-gen`, `--n-starts`,
+  or `--maxiter` for test runs.
+- Run `python electric_analogy_programming.py --help` to view the exact options
+  supported by the current version.

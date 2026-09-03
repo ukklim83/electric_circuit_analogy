@@ -1,0 +1,75 @@
+"""Canonical topology configurations for system1 through system4."""
+from __future__ import annotations
+from dataclasses import dataclass
+from math import nan
+from pathlib import Path
+from typing import Any
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+@dataclass(frozen=True)
+class SystemConfig:
+    name: str
+    args: tuple[float, float, float, int]
+    outlet_edge_idx: tuple[int, ...]
+    outlet_node_idx: tuple[int, ...]
+    inlet_edge_idx: tuple[int, ...]
+    inlet_node_idx: tuple[int, ...]
+    changing_edges: tuple[int, ...]
+    ini_list: tuple[tuple[Any, ...], ...]
+    inc_csv: str = "incidence_mat.csv"
+    length_csv: str = "length_mat.csv"
+    conc_csv: str = "concentration_mat.csv"
+    plot_type: tuple[str, ...] = ("compare", "concentration", "difference")
+
+    @property
+    def input_dir(self) -> Path:
+        return REPOSITORY_ROOT / self.name
+
+    def mutable_ini_list(self) -> list[list[Any]]:
+        return [list(item) for item in self.ini_list]
+
+SYSTEM_CONFIGS: dict[str, SystemConfig] = {
+    "system1": SystemConfig(
+        "system1", (1.002e-5, 100e-6, 100e-6, 20001),
+        (0, 1, 2, 3), (0, 1, 2, 3), (9, 10), (9, 10), tuple(range(11)),
+        (("f", 0, nan, "o", "m^3/s"), ("f", 1, nan, "o", "m^3/s"),
+         ("f", 2, nan, "o", "m^3/s"), ("f", 3, nan, "o", "m^3/s"),
+         ("f", 9, 2.89e-9 / 60, "i", "m^3/s"),
+         ("f", 10, 1.11e-9 / 60, "i", "m^3/s")),
+    ),
+    "system2": SystemConfig(
+        "system2", (1.002e-3, 500e-6, 500e-6, 20001),
+        (0, 1, 2, 3, 4), (0, 1, 2, 3, 4), (24, 25), (20, 21), tuple(range(26)),
+        (("f", 0, nan, "o", "m^3/s"), ("f", 1, nan, "o", "m^3/s"),
+         ("f", 2, nan, "o", "m^3/s"), ("f", 3, nan, "o", "m^3/s"),
+         ("f", 4, nan, "o", "m^3/s"),
+         ("f", 20, 10e-6 / 60, "i", "m^3/s"),
+         ("f", 21, 10e-6 / 60, "i", "m^3/s")),
+    ),
+    "system3": SystemConfig(
+        "system3", (1.002e-3, 500e-6, 500e-6, 20001),
+        (0, 1, 2, 3, 4), (0, 1, 2, 3, 4), (15, 16), (14, 15), tuple(range(17)),
+        (("f", 0, nan, "o", "m^3/s"), ("f", 1, nan, "o", "m^3/s"),
+         ("f", 2, nan, "o", "m^3/s"), ("f", 3, nan, "o", "m^3/s"),
+         ("f", 4, nan, "o", "m^3/s"),
+         ("f", 14, 10e-6 / 60, "i", "m^3/s"),
+         ("f", 15, 10e-6 / 60, "i", "m^3/s")),
+    ),
+    "system4": SystemConfig(
+        "system4", (1.002e-3, 500e-6, 500e-6, 20001),
+        (0, 1, 2, 3), (0, 1, 2, 3), (29, 30, 31), (23, 24, 25), tuple(range(32)),
+        (("f", 0, nan, "o", "m^3/s"), ("f", 1, nan, "o", "m^3/s"),
+         ("f", 2, nan, "o", "m^3/s"), ("f", 3, nan, "o", "m^3/s"),
+         ("f", 23, 6.6e-6 / 60, "i", "m^3/s"),
+         ("f", 24, 6.6e-6 / 60, "i", "m^3/s"),
+         ("f", 25, 6.6e-6 / 60, "i", "m^3/s")),
+    ),
+}
+
+def get_system_config(name: str) -> SystemConfig:
+    key = str(name).strip().lower()
+    try:
+        return SYSTEM_CONFIGS[key]
+    except KeyError as exc:
+        raise ValueError(f"Unknown system {name!r}; choose one of: {', '.join(SYSTEM_CONFIGS)}") from exc
