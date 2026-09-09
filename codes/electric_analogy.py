@@ -2360,6 +2360,8 @@ def _execute_length_change_nsga2(
     nGen=200,
     lower_delta_mm=None,
     upper_delta_mm=None,
+    lower_bounds=None,
+    upper_bounds=None,
 ):
     """
     Execute the length change optimization for the microfluidic circuit.
@@ -2394,6 +2396,8 @@ def _execute_length_change_nsga2(
         upper_delta_mm (float, optional): Additive upper bound relative to each
             changing edge's baseline length. If omitted, use three times the
             baseline length.
+        lower_bounds, upper_bounds (array-like, optional): Exact bounds for the
+            changing edges. Both must be supplied and override delta bounds.
 
     Returns:
         tuple: Contains the following:
@@ -2415,16 +2419,26 @@ def _execute_length_change_nsga2(
         raise IndexError("changing_edges contains an index outside length_csv")
 
     initial_variables = length[edge_indices]
-    lb = (
-        initial_variables / 3
-        if lower_delta_mm is None
-        else initial_variables + float(lower_delta_mm)
-    )
-    ub = (
-        initial_variables * 3
-        if upper_delta_mm is None
-        else initial_variables + float(upper_delta_mm)
-    )
+    if (lower_bounds is None) != (upper_bounds is None):
+        raise ValueError("lower_bounds and upper_bounds must be supplied together")
+    if lower_bounds is not None:
+        lb = np.asarray(lower_bounds, dtype=float)
+        ub = np.asarray(upper_bounds, dtype=float)
+        if lb.shape != initial_variables.shape or ub.shape != initial_variables.shape:
+            raise ValueError("Explicit bounds must match the number of changing edges")
+    else:
+        lb = (
+            initial_variables / 3
+            if lower_delta_mm is None
+            else initial_variables + float(lower_delta_mm)
+        )
+        ub = (
+            initial_variables * 3
+            if upper_delta_mm is None
+            else initial_variables + float(upper_delta_mm)
+        )
+    if np.any(~np.isfinite(lb)) or np.any(~np.isfinite(ub)):
+        raise ValueError("Every length bound must be finite")
     if np.any(lb <= 0):
         raise ValueError("Every lower length bound must be positive")
     if np.any(ub <= lb):
@@ -4453,7 +4467,9 @@ def execute_length_change(
     )
 
     if optimizer_key in {"nsga2", "nsgaii", "nsga"}:
-        supported_nsga2_options = {"lower_delta_mm", "upper_delta_mm"}
+        supported_nsga2_options = {
+            "lower_delta_mm", "upper_delta_mm", "lower_bounds", "upper_bounds"
+        }
         unknown_options = set(optimizer_options) - supported_nsga2_options
         if unknown_options:
             unknown = ", ".join(sorted(unknown_options))

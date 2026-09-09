@@ -73,6 +73,8 @@ def execute_length_change(
     upper_scale: float = 1.2,
     lower_delta_mm: float | None = None,
     upper_delta_mm: float | None = None,
+    lower_bounds=None,
+    upper_bounds=None,
     ftol: float = 1e-12,
     finite_diff_rel_step: float = 1e-6,
     progress_every: int = 5,
@@ -125,16 +127,26 @@ def execute_length_change(
         raise IndexError("changing_edges contains an index outside length_csv")
 
     initial_variables = initial_length[edge_indices]
-    lower = (
-        initial_variables * lower_scale
-        if lower_delta_mm is None
-        else initial_variables + float(lower_delta_mm)
-    )
-    upper = (
-        initial_variables * upper_scale
-        if upper_delta_mm is None
-        else initial_variables + float(upper_delta_mm)
-    )
+    if (lower_bounds is None) != (upper_bounds is None):
+        raise ValueError("lower_bounds and upper_bounds must be supplied together")
+    if lower_bounds is not None:
+        lower = np.asarray(lower_bounds, dtype=float)
+        upper = np.asarray(upper_bounds, dtype=float)
+        if lower.shape != initial_variables.shape or upper.shape != initial_variables.shape:
+            raise ValueError("Explicit bounds must match the number of changing edges")
+    else:
+        lower = (
+            initial_variables * lower_scale
+            if lower_delta_mm is None
+            else initial_variables + float(lower_delta_mm)
+        )
+        upper = (
+            initial_variables * upper_scale
+            if upper_delta_mm is None
+            else initial_variables + float(upper_delta_mm)
+        )
+    if np.any(~np.isfinite(lower)) or np.any(~np.isfinite(upper)):
+        raise ValueError("Every length bound must be finite")
     span = upper - lower
     if np.any(lower <= 0):
         raise ValueError("Every lower length bound must be positive")

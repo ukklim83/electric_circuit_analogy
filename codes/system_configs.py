@@ -8,6 +8,8 @@ from typing import Any
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOWER_LENGTH_DELTA_MM = -5.5
 DEFAULT_UPPER_LENGTH_DELTA_MM = 2.0
+DEFAULT_LOWER_LENGTH_SCALE = 0.5
+DEFAULT_UPPER_LENGTH_SCALE = 2.0
 
 @dataclass(frozen=True)
 class SystemConfig:
@@ -19,8 +21,10 @@ class SystemConfig:
     inlet_node_idx: tuple[int, ...]
     changing_edges: tuple[int, ...]
     ini_list: tuple[tuple[Any, ...], ...]
-    lower_length_delta_mm: float | None = DEFAULT_LOWER_LENGTH_DELTA_MM
-    upper_length_delta_mm: float | None = DEFAULT_UPPER_LENGTH_DELTA_MM
+    lower_length_delta_mm: float = DEFAULT_LOWER_LENGTH_DELTA_MM
+    upper_length_delta_mm: float = DEFAULT_UPPER_LENGTH_DELTA_MM
+    lower_length_scale: float = DEFAULT_LOWER_LENGTH_SCALE
+    upper_length_scale: float = DEFAULT_UPPER_LENGTH_SCALE
     inc_csv: str = "incidence_mat.csv"
     length_csv: str = "length_mat.csv"
     conc_csv: str = "concentration_mat.csv"
@@ -33,15 +37,19 @@ class SystemConfig:
             raise ValueError(f"{self.name}: changing_edges contains duplicates")
         if any(index < 0 for index in self.changing_edges):
             raise ValueError(f"{self.name}: changing_edges contains a negative index")
-        deltas = (self.lower_length_delta_mm, self.upper_length_delta_mm)
-        if (deltas[0] is None) != (deltas[1] is None):
-            raise ValueError(f"{self.name}: both additive length bounds must be set together")
-        if deltas[0] is not None and deltas[0] >= deltas[1]:
+        if self.lower_length_delta_mm >= self.upper_length_delta_mm:
             raise ValueError(f"{self.name}: lower length delta must be smaller than upper")
+        if not 0 < self.lower_length_scale < self.upper_length_scale:
+            raise ValueError(f"{self.name}: require 0 < lower length scale < upper")
 
     @property
     def input_dir(self) -> Path:
         return REPOSITORY_ROOT / self.name
+
+    @property
+    def reviewed_changing_edges(self) -> tuple[int, ...]:
+        """CAD-reviewed subset; ``changing_edges`` remains a compatibility alias."""
+        return self.changing_edges
 
     def mutable_ini_list(self) -> list[list[Any]]:
         return [list(item) for item in self.ini_list]

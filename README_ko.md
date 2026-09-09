@@ -53,9 +53,9 @@ python electric_analogy_programming.py --help
 python electric_analogy_programming.py --system system1 --solve-only
 ```
 
-기본 결과는 `results/system1/nsga2/`에 저장됩니다. `--solve-only`에서는
-`--optimizer`가 최적화에 사용되지는 않지만 결과 경로를 구분하는 이름으로
-사용됩니다.
+기본 결과는 `results/system1/nsga2/reviewed_additive/`에 저장됩니다.
+`--solve-only`에서는 `--optimizer`가 최적화에 사용되지는 않지만 결과 경로를
+구분하는 이름으로 사용됩니다.
 
 길이를 최적화하려면 원하는 optimizer를 선택합니다.
 
@@ -91,7 +91,9 @@ python electric_analogy_programming.py --system system1 --optimizer slsqp --n-st
 | `--n-gen` | NSGA-II/PSO 최대 generation 수 | NSGA-II `600`; PSO는 평가 예산으로 계산 |
 | `--n-starts` | SLSQP 독립 재시작 횟수 | `20` |
 | `--maxiter` | 각 SLSQP 실행의 최대 iteration 수 | `1000` |
-| `--output-dir` | 사용자가 지정하는 결과 디렉터리 | `results/<system>/<optimizer>/` |
+| `--edge-mode` | `reviewed`: CAD 검토 edge 집합, `all`: 전체 논리 edge | `reviewed` |
+| `--bound-mode` | `additive`: 초기값 −5.5/+2.0 mm, `relative`: 초기값 0.5배/2.0배 | `additive` |
+| `--output-dir` | 사용자가 지정하는 결과 디렉터리 | `results/<system>/<optimizer>/<edge_mode>_<bound_mode>/` |
 | `--solve-only` | 길이 최적화를 생략하고 입력 설계만 해석 | 사용하지 않음 |
 
 재현 가능한 PSO/SLSQP 실행에는 동일한 `--seed`와 나머지 optimizer 옵션을
@@ -116,10 +118,19 @@ system1/
 edge 목록은 `codes/system_configs.py`에 정의되어 있습니다. 입력 CSV의 edge와
 node 순서는 해당 설정의 인덱스와 일치해야 합니다.
 
-모든 system은 설정된 changing edge에 대해 `baseline - 5.5 mm`에서
-`baseline + 2.0 mm`까지의 additive optimization bound를 사용합니다. 선택된
-changing edge 때문에 lower length bound가 0 이하가 되면 실행은 fail-closed로
-중단됩니다. 검토된 changing-edge 목록은 다음과 같습니다.
+edge 집합과 bound 방식은 하나의 코드에서 서로 독립적으로 선택합니다.
+
+| 조합 | 의미 | CAD 배포 상태 |
+|---|---|---|
+| `reviewed + additive` | 검토 edge, `초기값 - 5.5 mm`~`초기값 + 2.0 mm` | 생산 기본값; 기존 CAD workflow 적용 가능 |
+| `reviewed + relative` | 검토 edge, `초기값 × 0.5`~`초기값 × 2.0` | 탐색용; CAD 재교정 필요 |
+| `all + relative` | 전체 edge, `초기값 × 0.5`~`초기값 × 2.0` | 탐색용; 일부 edge는 CAD controller가 없을 수 있음 |
+| `all + additive` | 전체 edge, `초기값 - 5.5 mm`~`초기값 + 2.0 mm` | 하한이 0 이하인 edge가 있으면 즉시 중단 |
+
+additive mode는 잘못된 하한을 임의로 clipping하지 않습니다. 예를 들어 짧은
+fixed edge까지 `--edge-mode all`로 포함해 `초기값 - 5.5 mm <= 0`이 되면,
+실행을 중단하고 위험한 논리 edge를 모두 표시합니다. 두 bound profile과
+검토된 changing-edge 목록은 `codes/system_configs.py`에 정의되어 있습니다.
 
 | System | Topology | 최적화 가능한 논리 edge |
 |---|---|---|
@@ -129,6 +140,23 @@ changing edge 때문에 lower length bound가 0 이하가 되면 실행은 fail-
 | `system4` | `3_4` | E01-E04, E11-E15, E22-E25 |
 
 각 system에서 위 목록에 포함되지 않은 edge는 고정됩니다.
+
+실행 예시는 다음과 같습니다.
+
+```bash
+# 생산 기본 profile
+python electric_analogy_programming.py --system system3 --optimizer nsga2 \
+  --edge-mode reviewed --bound-mode additive
+
+# 전체 edge 탐색 profile
+python electric_analogy_programming.py --system system3 --optimizer pso \
+  --edge-mode all --bound-mode relative
+```
+
+모든 최적화 실행은 `optimization_run_config.json`을 생성합니다. 이 파일에는
+선택한 mode, changing-edge index와 E 번호, edge별 초기/하한/상한 길이,
+요청한 delta/scale, `cad_release_eligible`가 기록되며 optimizer에 실제 전달된
+profile의 기준 증적이 됩니다.
 
 입력 디렉터리는 원본 데이터 보관용으로 취급됩니다. 프로그램은 입력 CSV를
 결과 디렉터리로 복사한 후 그 복사본을 사용하며, 시스템 입력 디렉터리 또는
@@ -145,6 +173,8 @@ changing edge 때문에 lower length bound가 0 이하가 되면 실행은 fail-
 results/
 └── system1/
     ├── nsga2/
+    │   ├── reviewed_additive/
+    │   └── all_relative/
     ├── pso/
     └── slsqp/
 ```
@@ -153,6 +183,7 @@ results/
 표시됩니다. 실행 방법에 따라 다음 파일들이 생성될 수 있습니다.
 
 - `new_length_mat.csv`: 최적화된 채널 길이
+- `optimization_run_config.json`: 확정 edge/bound profile과 CAD 적용 가능 여부
 - `current_vec_total.csv`, `voltage_vec_total.csv`: 원 설계의 유량과 압력
 - `current_vec_revised.csv`, `voltage_vec_revised.csv`: 최적화 설계의 유량과 압력
 - `outlet_*.png`: outlet 유량·농도 비교 그래프
@@ -208,6 +239,7 @@ electric_circuit_analogy/
 │   ├── electric_analogy_pso.py         # PSO backend
 │   ├── electric_analogy_slsqp.py       # multi-start SLSQP backend
 │   ├── electric_analogy_programming.py # 공통 CLI/driver
+│   ├── optimization_profiles.py        # 공통 edge/bound mode 해석기
 │   ├── system_configs.py               # system1~system4 설정
 │   └── resistance.py                   # 채널 저항식
 ├── system1/                            # 입력 데이터와 호환 launcher

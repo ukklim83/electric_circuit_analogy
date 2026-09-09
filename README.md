@@ -53,9 +53,10 @@ For a first run, analyze the original system1 design without optimization:
 python electric_analogy_programming.py --system system1 --solve-only
 ```
 
-By default, the results are written to `results/system1/nsga2/`. With
-`--solve-only`, `--optimizer` is not used for optimization but still supplies
-the optimizer name in the result path.
+By default, the results are written to
+`results/system1/nsga2/reviewed_additive/`. With `--solve-only`, `--optimizer`
+is not used for optimization but still supplies the optimizer name in the
+result path.
 
 Select an optimizer to optimize channel lengths:
 
@@ -91,7 +92,9 @@ python electric_analogy_programming.py --system system1 --optimizer slsqp --n-st
 | `--n-gen` | Maximum NSGA-II/PSO generations | NSGA-II `600`; PSO derives it from its evaluation budget |
 | `--n-starts` | Number of independent SLSQP restarts | `20` |
 | `--maxiter` | Maximum iterations in each SLSQP run | `1000` |
-| `--output-dir` | User-defined result directory | `results/<system>/<optimizer>/` |
+| `--edge-mode` | `reviewed`: configured CAD-reviewed subset; `all`: every logical edge | `reviewed` |
+| `--bound-mode` | `additive`: initial −5.5/+2.0 mm; `relative`: initial 0.5x/2.0x | `additive` |
+| `--output-dir` | User-defined result directory | `results/<system>/<optimizer>/<edge_mode>_<bound_mode>/` |
 | `--solve-only` | Analyze the input design without length optimization | Disabled |
 
 For reproducible PSO/SLSQP runs, record the `--seed` together with all other
@@ -118,10 +121,20 @@ rates, and the list of optimizable edges are defined for each system in
 `codes/system_configs.py`. The edge and node order in the CSV files must match
 the indices in that configuration.
 
-All systems use additive optimization bounds of `baseline - 5.5 mm` and
-`baseline + 2.0 mm` for their configured changing edges. A run fails closed if
-the selected changing-edge set would produce a nonpositive lower length bound.
-The reviewed changing-edge sets are:
+The edge set and bounds are independently selectable from one codebase:
+
+| Mode | Meaning | CAD release status |
+|---|---|---|
+| `reviewed + additive` | Reviewed edges, `initial - 5.5 mm` to `initial + 2.0 mm` | Production default; eligible for the existing CAD workflow |
+| `reviewed + relative` | Reviewed edges, `initial × 0.5` to `initial × 2.0` | Exploratory; requires new CAD calibration |
+| `all + relative` | Every edge, `initial × 0.5` to `initial × 2.0` | Exploratory; unreviewed edges may lack CAD controllers |
+| `all + additive` | Every edge, `initial - 5.5 mm` to `initial + 2.0 mm` | Fails closed when any lower bound is nonpositive |
+
+The additive mode fails closed rather than silently clipping invalid bounds.
+For example, short fixed edges included by `--edge-mode all` can make
+`initial - 5.5 mm <= 0`; the error lists every unsafe logical edge. The
+two bound profiles and the reviewed changing-edge sets are defined in
+`codes/system_configs.py`:
 
 | System | Topology | Optimizable logical edges |
 |---|---|---|
@@ -131,6 +144,23 @@ The reviewed changing-edge sets are:
 | `system4` | `3_4` | E01-E04, E11-E15, E22-E25 |
 
 All edges not listed for a system remain fixed.
+
+Examples:
+
+```bash
+# Production-default profile
+python electric_analogy_programming.py --system system3 --optimizer nsga2 \
+  --edge-mode reviewed --bound-mode additive
+
+# Whole-network exploratory optimization
+python electric_analogy_programming.py --system system3 --optimizer pso \
+  --edge-mode all --bound-mode relative
+```
+
+Every optimization writes `optimization_run_config.json`, including the
+selected modes, changing-edge indices and E-names, exact initial/lower/upper
+lengths, requested deltas/scales, and `cad_release_eligible`. This file is the
+authoritative record of the profile actually sent to the optimizer.
 
 Treat the system directories as original input storage. The program copies the
 input CSV files to the result directory and works on those copies. It rejects an
@@ -148,6 +178,8 @@ The default result layout is:
 results/
 └── system1/
     ├── nsga2/
+    │   ├── reviewed_additive/
+    │   └── all_relative/
     ├── pso/
     └── slsqp/
 ```
@@ -157,6 +189,7 @@ At the end of a run, the program prints the actual result directory as
 include:
 
 - `new_length_mat.csv`: optimized channel lengths
+- `optimization_run_config.json`: resolved edge/bound profile and CAD eligibility
 - `current_vec_total.csv`, `voltage_vec_total.csv`: original-design flow rates
   and pressures
 - `current_vec_revised.csv`, `voltage_vec_revised.csv`: optimized-design flow
@@ -215,6 +248,7 @@ electric_circuit_analogy/
 │   ├── electric_analogy_pso.py         # PSO backend
 │   ├── electric_analogy_slsqp.py       # Multi-start SLSQP backend
 │   ├── electric_analogy_programming.py # Shared CLI/driver
+│   ├── optimization_profiles.py        # Shared edge/bound mode resolver
 │   ├── system_configs.py               # Configuration for system1-system4
 │   └── resistance.py                   # Channel resistance formulas
 ├── system1/                            # Input data and compatibility launcher

@@ -103,6 +103,8 @@ class _CircuitEvaluator:
         upper_scale,
         lower_delta_mm,
         upper_delta_mm,
+        lower_bounds,
+        upper_bounds,
         solver_module,
     ):
         self.solver = solver_module
@@ -118,16 +120,29 @@ class _CircuitEvaluator:
         if np.any(self.edge_indices < 0) or np.any(self.edge_indices >= self.initial_length.size):
             raise IndexError("changing_edges contains an index outside length_csv")
         initial_variables = self.initial_length[self.edge_indices]
-        self.lower = (
-            initial_variables * lower_scale
-            if lower_delta_mm is None
-            else initial_variables + float(lower_delta_mm)
-        )
-        self.upper = (
-            initial_variables * upper_scale
-            if upper_delta_mm is None
-            else initial_variables + float(upper_delta_mm)
-        )
+        if (lower_bounds is None) != (upper_bounds is None):
+            raise ValueError("lower_bounds and upper_bounds must be supplied together")
+        if lower_bounds is not None:
+            self.lower = np.asarray(lower_bounds, dtype=float)
+            self.upper = np.asarray(upper_bounds, dtype=float)
+            if (
+                self.lower.shape != initial_variables.shape
+                or self.upper.shape != initial_variables.shape
+            ):
+                raise ValueError("Explicit bounds must match the number of changing edges")
+        else:
+            self.lower = (
+                initial_variables * lower_scale
+                if lower_delta_mm is None
+                else initial_variables + float(lower_delta_mm)
+            )
+            self.upper = (
+                initial_variables * upper_scale
+                if upper_delta_mm is None
+                else initial_variables + float(upper_delta_mm)
+            )
+        if np.any(~np.isfinite(self.lower)) or np.any(~np.isfinite(self.upper)):
+            raise ValueError("Every length bound must be finite")
         self.span = self.upper - self.lower
         if np.any(self.lower <= 0):
             raise ValueError("Every lower length bound must be positive")
@@ -263,6 +278,7 @@ def execute_length_change(
     relative_improvement_tol: float = 1e-6, progress_every_generations: int = 50,
     lower_scale: float = 0.8, upper_scale: float = 1.2,
     lower_delta_mm: float | None = None, upper_delta_mm: float | None = None,
+    lower_bounds=None, upper_bounds=None,
     enforce_nonnegative: bool = False, feasibility_threshold: float = 1e-5,
     output_suffix: str = "pso", solver_module=None,
 ):
@@ -286,7 +302,8 @@ def execute_length_change(
     evaluator = _CircuitEvaluator(
         whatToSolve, changing_edges, inc_csv, length_csv, conc_csv, args, ini_list,
         inlet_node_idx, inlet_edge_idx, address, flow_wght, conc_wght,
-        lower_scale, upper_scale, lower_delta_mm, upper_delta_mm, solver,
+        lower_scale, upper_scale, lower_delta_mm, upper_delta_mm,
+        lower_bounds, upper_bounds, solver,
     )
     if nGen is None:
         nGen = max(1, math.ceil(max_fes_per_dim * evaluator.edge_indices.size / popSize))
