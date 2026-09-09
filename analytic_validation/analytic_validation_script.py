@@ -2,6 +2,12 @@ import numpy as np
 import sympy as sp
 import copy
 import matplotlib.pyplot as plt
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent
+LEGACY_OUTPUT_DIR = BASE_DIR / "outputs" / "legacy_symbolic"
+LEGACY_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %% plt rcparams update
 plt.rcParams.update(
@@ -127,7 +133,7 @@ def create_variable_plots(func, static_grid, variable_grid, resist_var, y_num):
 
             plt.title(f"x_o_{y_num}_param_{static_grid[num]:e}")
             plt.tight_layout()
-            plt.savefig(f"x_o_{y_num}_param_{static_grid[num]:e}.png")
+            plt.savefig(LEGACY_OUTPUT_DIR / f"x_o_{y_num}_param_{static_grid[num]:e}.png")
             plt.close()
 
 
@@ -179,7 +185,7 @@ def create_variable_plots_q(func, static_grid, variable_grid, resist_var, y_num)
 
             plt.title(f"q_o_{y_num}_param_{static_grid[num]:e}")
             plt.tight_layout()
-            plt.savefig(f"q_o_{y_num}_param_{static_grid[num]:e}.png")
+            plt.savefig(LEGACY_OUTPUT_DIR / f"q_o_{y_num}_param_{static_grid[num]:e}.png")
             plt.close()
 
 
@@ -189,7 +195,7 @@ def printer(variable, filename):
 
 
 # %% variable define
-address = "./electric_circuit_analogy/analytic_validation/"
+address = str(LEGACY_OUTPUT_DIR) + "/"
 
 A = sp.Matrix(
     [
@@ -807,7 +813,7 @@ from matplotlib.patches import Patch
 import pandas as pd
 
 # Load all sheets into a dict of DataFrames
-path = "./CV_NCV_map.xlsx"
+path = BASE_DIR / "CV_NCV_map.xlsx"
 sheets = pd.read_excel(path, sheet_name=None, index_col=0)
 
 # Determine dimensions

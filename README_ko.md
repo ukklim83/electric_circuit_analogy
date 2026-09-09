@@ -23,6 +23,9 @@
 - SciPy 1.10 이상, 2 미만
 - Matplotlib 3.7 이상, 4 미만
 - pymoo 0.6 이상, 0.7 미만
+- SymPy 1.12 이상, 2 미만
+- mpmath 1.3 이상, 1.4 미만
+- openpyxl 3.1 이상, 4 미만
 
 ## 설치
 
@@ -165,6 +168,11 @@ profile의 기준 증적이 됩니다.
 농도 행렬에 대한 자세한 설명은
 [`conc_matrix_explanation.md`](conc_matrix_explanation.md)를 참고하십시오.
 
+기호식 및 곡률 분석 workflow는
+[`analytic_validation/README_ko.md`](analytic_validation/README_ko.md)에 정리했습니다.
+이 검사는 8-resistance prototype이 대상이며, system별 solver 회귀 검사나 CAD
+검증을 대체하지 않습니다.
+
 ## 결과 확인
 
 기본 디렉터리 구조는 다음과 같습니다.
@@ -234,6 +242,7 @@ electric_circuit_analogy/
 ├── electric_analogy.py                 # 루트 호환 facade
 ├── electric_analogy_programming.py     # 기본 CLI launcher
 ├── requirements.txt
+├── analytic_validation/                # 기호 prototype 및 곡률 검사
 ├── codes/
 │   ├── electric_analogy.py             # 공통 solver와 NSGA-II
 │   ├── electric_analogy_pso.py         # PSO backend

@@ -24,6 +24,9 @@ analysis together with NSGA-II, PSO, and multi-start SLSQP optimization.
 - SciPy 1.10 or later and earlier than 2
 - Matplotlib 3.7 or later and earlier than 4
 - pymoo 0.6 or later and earlier than 0.7
+- SymPy 1.12 or later and earlier than 2
+- mpmath 1.3 or later and earlier than 1.4
+- openpyxl 3.1 or later and earlier than 4
 
 ## Installation
 
@@ -170,6 +173,11 @@ subdirectories.
 See [`conc_matrix_explanation.md`](conc_matrix_explanation.md) for more details
 about the concentration matrix.
 
+The compact symbolic and curvature-analysis workflow is documented in
+[`analytic_validation/README.md`](analytic_validation/README.md). Its scope is
+the eight-resistance prototype; it is not a replacement for system-specific
+solver regression or CAD validation.
+
 ## Results
 
 The default result layout is:
@@ -243,6 +251,7 @@ electric_circuit_analogy/
 ├── electric_analogy.py                 # Root compatibility facade
 ├── electric_analogy_programming.py     # Main CLI launcher
 ├── requirements.txt
+├── analytic_validation/                # Symbolic prototype and curvature checks
 ├── codes/
 │   ├── electric_analogy.py             # Shared solver and NSGA-II
 │   ├── electric_analogy_pso.py         # PSO backend
