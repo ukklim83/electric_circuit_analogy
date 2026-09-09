@@ -136,6 +136,8 @@ def execute_length_change(
         else initial_variables + float(upper_delta_mm)
     )
     span = upper - lower
+    if np.any(lower <= 0):
+        raise ValueError("Every lower length bound must be positive")
     if np.any(span <= 0):
         raise ValueError("Every upper length bound must exceed its lower bound")
     initial_z = (initial_length[edge_indices] - lower) / span

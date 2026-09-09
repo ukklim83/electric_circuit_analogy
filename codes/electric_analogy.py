@@ -2358,6 +2358,8 @@ def _execute_length_change_nsga2(
     address,
     popSize=200,
     nGen=200,
+    lower_delta_mm=None,
+    upper_delta_mm=None,
 ):
     """
     Execute the length change optimization for the microfluidic circuit.
@@ -2386,6 +2388,12 @@ def _execute_length_change_nsga2(
         address (str): Directory path for saving output files.
         popSize (int, optional): Population size for optimization. Defaults to 100.
         nGen (int, optional): Number of generations for optimization. Defaults to 200.
+        lower_delta_mm (float, optional): Additive lower bound relative to each
+            changing edge's baseline length. If omitted, use one third of the
+            baseline length.
+        upper_delta_mm (float, optional): Additive upper bound relative to each
+            changing edge's baseline length. If omitted, use three times the
+            baseline length.
 
     Returns:
         tuple: Contains the following:
@@ -2400,9 +2408,28 @@ def _execute_length_change_nsga2(
     # assigned into this array below, so request an owned writable copy.
     length = length_df["length"].to_numpy(copy=True)
 
-    lb = np.array([i / 3 for i in length])
-    ub = np.array([i * 3 for i in length])
-    x0 = length
+    edge_indices = np.asarray(changing_edges, dtype=int)
+    if edge_indices.ndim != 1 or edge_indices.size == 0:
+        raise ValueError("changing_edges must contain at least one edge index")
+    if np.any(edge_indices < 0) or np.any(edge_indices >= length.size):
+        raise IndexError("changing_edges contains an index outside length_csv")
+
+    initial_variables = length[edge_indices]
+    lb = (
+        initial_variables / 3
+        if lower_delta_mm is None
+        else initial_variables + float(lower_delta_mm)
+    )
+    ub = (
+        initial_variables * 3
+        if upper_delta_mm is None
+        else initial_variables + float(upper_delta_mm)
+    )
+    if np.any(lb <= 0):
+        raise ValueError("Every lower length bound must be positive")
+    if np.any(ub <= lb):
+        raise ValueError("Every upper length bound must exceed its lower bound")
+    x0 = initial_variables.copy()
 
     # Prepare concentration data
     tmp_conc_df = conc_mat_produce(conc_csv, address)
@@ -2469,7 +2496,7 @@ def _execute_length_change_nsga2(
 
     # Select a solution from the Pareto-optimal set based on your preference
     all_solutions = res.X
-    lengths_df = pd.DataFrame(all_solutions, columns=length_df.index)
+    lengths_df = pd.DataFrame(all_solutions, columns=length_df.index[edge_indices])
     lengths_df.to_csv(f"{address}/new_lengths_mat.csv")
     
     selected_solution = select_optimal_solution(res)
@@ -2726,10 +2753,10 @@ def process_optimization_results(res, callback, x0, address):
 
 def select_optimal_solution(res):
     """
-    Select the optimal solution from the Pareto front using the knee point method.
+    Select the Pareto-front solution with the minimum normalized distance to the ideal point.
 
     This function normalizes the objectives, calculates the distances to the ideal point,
-    and selects the solution with the maximum distance (knee point).
+    and selects the solution with the minimum distance.
 
     Args:
         res (Result): The result object from the optimization algorithm.
@@ -2747,11 +2774,11 @@ def select_optimal_solution(res):
     # Calculate distances to the ideal point (origin)
     distances = cdist(normalized_objectives, np.array([[0, 0]]))
 
-    # Find the knee point (solution with maximum distance)
-    knee_idx = np.argmax(distances)
+    # Find the solution closest to the ideal point.
+    selected_idx = np.argmin(distances)
 
-    # Select the solution corresponding to the knee point
-    selected_solution = res.X[knee_idx]
+    # Select the solution corresponding to the minimum ideal-point distance.
+    selected_solution = res.X[selected_idx]
 
     return selected_solution
 
@@ -4426,13 +4453,16 @@ def execute_length_change(
     )
 
     if optimizer_key in {"nsga2", "nsgaii", "nsga"}:
-        if optimizer_options:
-            unknown = ", ".join(sorted(optimizer_options))
+        supported_nsga2_options = {"lower_delta_mm", "upper_delta_mm"}
+        unknown_options = set(optimizer_options) - supported_nsga2_options
+        if unknown_options:
+            unknown = ", ".join(sorted(unknown_options))
             raise TypeError(f"Unsupported NSGA-II option(s): {unknown}")
         return _execute_length_change_nsga2(
             *common_args,
             popSize=popSize,
             nGen=nGen,
+            **optimizer_options,
         )
 
     solver_module = sys.modules[__name__]

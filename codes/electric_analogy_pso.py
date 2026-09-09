@@ -129,6 +129,8 @@ class _CircuitEvaluator:
             else initial_variables + float(upper_delta_mm)
         )
         self.span = self.upper - self.lower
+        if np.any(self.lower <= 0):
+            raise ValueError("Every lower length bound must be positive")
         if np.any(self.span <= 0):
             raise ValueError("Every upper length bound must exceed its lower bound")
         self.initial_z = (self.initial_length[self.edge_indices] - self.lower) / self.span

@@ -69,6 +69,10 @@ def run(
         selected_pop = default_pop if pop_size is None else pop_size
         selected_gen = 600 if optimizer == "nsga2" and n_gen is None else n_gen
         options: dict[str, object] = {}
+        if config.lower_length_delta_mm is not None:
+            options["lower_delta_mm"] = config.lower_length_delta_mm
+        if config.upper_length_delta_mm is not None:
+            options["upper_delta_mm"] = config.upper_length_delta_mm
         if optimizer == "pso":
             options.update(seed=seed, max_fes_per_dim=10_000)
         elif optimizer == "slsqp":

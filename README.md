@@ -118,6 +118,20 @@ rates, and the list of optimizable edges are defined for each system in
 `codes/system_configs.py`. The edge and node order in the CSV files must match
 the indices in that configuration.
 
+All systems use additive optimization bounds of `baseline - 5.5 mm` and
+`baseline + 2.0 mm` for their configured changing edges. A run fails closed if
+the selected changing-edge set would produce a nonpositive lower length bound.
+The reviewed changing-edge sets are:
+
+| System | Topology | Optimizable logical edges |
+|---|---|---|
+| `system1` | system1 | E01-E05, E07 |
+| `system2` | `b` | E01-E05, E08, E11, E13, E15 |
+| `system3` | `c` | E01-E05, E12-E15, E20-E22 |
+| `system4` | `3_4` | E01-E04, E11-E15, E22-E25 |
+
+All edges not listed for a system remain fixed.
+
 Treat the system directories as original input storage. The program copies the
 input CSV files to the result directory and works on those copies. It rejects an
 `--output-dir` that points to a system input directory or one of its

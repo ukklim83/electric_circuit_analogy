@@ -116,6 +116,20 @@ system1/
 edge 목록은 `codes/system_configs.py`에 정의되어 있습니다. 입력 CSV의 edge와
 node 순서는 해당 설정의 인덱스와 일치해야 합니다.
 
+모든 system은 설정된 changing edge에 대해 `baseline - 5.5 mm`에서
+`baseline + 2.0 mm`까지의 additive optimization bound를 사용합니다. 선택된
+changing edge 때문에 lower length bound가 0 이하가 되면 실행은 fail-closed로
+중단됩니다. 검토된 changing-edge 목록은 다음과 같습니다.
+
+| System | Topology | 최적화 가능한 논리 edge |
+|---|---|---|
+| `system1` | system1 | E01-E05, E07 |
+| `system2` | `b` | E01-E05, E08, E11, E13, E15 |
+| `system3` | `c` | E01-E05, E12-E15, E20-E22 |
+| `system4` | `3_4` | E01-E04, E11-E15, E22-E25 |
+
+각 system에서 위 목록에 포함되지 않은 edge는 고정됩니다.
+
 입력 디렉터리는 원본 데이터 보관용으로 취급됩니다. 프로그램은 입력 CSV를
 결과 디렉터리로 복사한 후 그 복사본을 사용하며, 시스템 입력 디렉터리 또는
 그 하위 경로를 `--output-dir`로 지정하는 것을 차단합니다.
