@@ -178,6 +178,16 @@ The compact symbolic and curvature-analysis workflow is documented in
 the eight-resistance prototype; it is not a replacement for system-specific
 solver regression or CAD validation.
 
+## Published optimizer benchmark
+
+The machine-readable 30-seed outcomes underlying Supplementary Table S11 are
+provided in
+[`benchmark/published_results/digital_discovery_v1`](benchmark/published_results/digital_discovery_v1).
+They cover NSGA-II, PSO, and multi-start SLSQP for each of the four network
+topologies. [`benchmark/README.md`](benchmark/README.md) documents the data
+fields, aggregation command, and the correspondence between the benchmark's
+legacy topology identifiers and Supplementary Fig. 11/Table S11.
+
 ## Results
 
 The default result layout is:
@@ -252,6 +262,7 @@ electric_circuit_analogy/
 ├── electric_analogy_programming.py     # Main CLI launcher
 ├── requirements.txt
 ├── analytic_validation/                # Symbolic prototype and curvature checks
+├── benchmark/                           # 30-seed optimizer benchmark and data
 ├── codes/
 │   ├── electric_analogy.py             # Shared solver and NSGA-II
 │   ├── electric_analogy_pso.py         # PSO backend

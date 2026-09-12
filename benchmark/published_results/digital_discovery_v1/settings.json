@@ -1,0 +1,16 @@
+{
+  "max_fes_per_dim": 10000,
+  "nsga2_pop_size": 600,
+  "pso_pop_size": 50,
+  "slsqp_starts": 20,
+  "slsqp_maxiter": 1000,
+  "lower_scale": 0.3333333333333333,
+  "upper_scale": 3.0,
+  "flow_abs_tolerance": 0.001,
+  "conc_abs_tolerance": 0.001,
+  "pso_stagnation_generations": 300,
+  "pso_rel_improvement_tol": 1e-06,
+  "nsga2_progress_every_generations": 5,
+  "pso_progress_every_generations": 50,
+  "slsqp_progress_every_iterations": 5
+}
