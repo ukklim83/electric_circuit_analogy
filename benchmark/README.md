@@ -7,7 +7,7 @@ four microfluidic network topologies.
 ## Published dataset
 
 The files used for the reported comparison are in
-[`published_results/digital_discovery_v1`](published_results/digital_discovery_v1):
+[`published_results/benchmark_v1`](published_results/benchmark_v1):
 
 - `optimizer_benchmark_raw_runs.csv` contains one row for every topology,
   optimizer, and seed (4 topologies x 3 optimizers x 30 seeds = 360 rows).
@@ -47,7 +47,7 @@ aggregates used by the table are provided in
 From the repository root, run:
 
 ```bash
-python benchmark/analyze_benchmark_results.py benchmark/published_results/digital_discovery_v1
+python benchmark/analyze_benchmark_results.py benchmark/published_results/benchmark_v1
 ```
 
 This regenerates `analysis_by_topology_algorithm.csv` from the 360 raw outcomes.
@@ -65,6 +65,6 @@ python benchmark/run_optimizer_benchmark.py --help
 ```
 
 The authoritative settings for the published run are in
-`published_results/digital_discovery_v1/settings.json`. The `inputs` directory
+`published_results/benchmark_v1/settings.json`. The `inputs` directory
 is intentionally isolated from the main examples because it preserves the
 legacy solver/input snapshots used by this benchmark.
